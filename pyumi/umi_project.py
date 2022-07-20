@@ -619,7 +619,7 @@ class UmiProject:
             Shading if the template assignment is None, Buildings for the rest.
             """
             obj3dm = umi_project.file3dm.Objects.FindId(series.guid)
-            if series["TemplateName"] is None:
+            if series["TemplateName"] is None or series["TemplateName"] is np.NaN:
                 obj3dm.Attributes.LayerIndex = umi_project.umiLayers[
                     "umi::Context::Shading"
                 ].Index

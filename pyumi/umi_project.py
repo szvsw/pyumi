@@ -361,6 +361,7 @@ class UmiProject:
         epw=None,
         fid=None,
         to_crs=None,
+        use_errors=False,
         **kwargs,
     ):
         """Return an UMI project by reading a GeoDataFrame.
@@ -458,9 +459,10 @@ class UmiProject:
             # umi one ("TemplateName")
             gdf.rename(columns={template_column_name: "TemplateName"}, inplace=True)
         gdf.index = _index  # reset the index to previous
-        gdf_error = (
-            gdf.copy()
-        )  # Copy the gdf so that the original data can be filtered for all errors
+        if use_errors:
+            gdf_error = (
+                gdf.copy()
+            )  # Copy the gdf so that the original data can be filtered for all errors
 
         # Filter rows; Display invalid geometries in log
         valid_geoms = gdf.geometry.is_valid
@@ -472,7 +474,8 @@ class UmiProject:
             )
         else:
             log.info("No invalid geometries reported")
-        gdf_error["Geoms Error"] = ~valid_geoms
+        if use_errors:
+            gdf_error["Geoms Error"] = ~valid_geoms
         gdf = gdf.loc[valid_geoms, :]  # Only valid geoms
 
         # Filter rows missing attribute
@@ -489,7 +492,8 @@ class UmiProject:
                 f"{valid_attrs.sum()} reported features with a "
                 f"{height_column_name} attribute value"
             )
-        gdf_error["Attrs Error"] = ~valid_attrs
+        if use_errors:
+            gdf_error["Attrs Error"] = ~valid_attrs
         gdf = gdf.loc[valid_attrs, :]
 
         # Set the identification of buildings. This "fid" is used as the
@@ -554,17 +558,19 @@ class UmiProject:
                 f"{gdf.size} breps created in "
                 f"{time.time() - start_time:,.2f} seconds"
             )
-        gdf_error.explode()
-        gdf_error["Brep Error"] = [list() for x in range(len(gdf_error.index))]
+        if use_errors:
+            gdf_error.explode()
+            gdf_error["Brep Error"] = [list() for x in range(len(gdf_error.index))]
         # Iterate over the rows of the error gdf since its shape is different
         # This allows you to report the original building index and
         # which part has an error while following the original shape
-        for index, row in gdf_error.iterrows():
-            for multipart, isBrepError in enumerate(errored_brep[index]):
-                if isBrepError:
-                    gdf_error.loc[index, "Brep Error"] = gdf_error.loc[
-                        index, "Brep Error"
-                    ] + [multipart]
+        if use_errors:
+            for index, row in gdf_error.iterrows():
+                for multipart, isBrepError in enumerate(errored_brep[index]):
+                    if isBrepError:
+                        gdf_error.loc[index, "Brep Error"] = gdf_error.loc[
+                            index, "Brep Error"
+                        ] + [multipart]
         gdf = gdf.loc[~errored_brep, :]
 
         if epw is None:
@@ -649,12 +655,13 @@ class UmiProject:
         # Move Breps to layers (Buildings or Shading)
         tqdm.pandas(desc="Moving Breps on layers")
         umi_project.gdf_3dm.progress_apply(move_to_layer, axis=1)
-        gdf_error = gdf_error[
-            (gdf_error["Brep Error"].apply(lambda x: len(x) > 0))
-            | (gdf_error["Geoms Error"] == True)
-            | (gdf_error["Attrs Error"] == True)
-        ]
-        umi_project.gdf_error = gdf_error
+        if use_errors:
+            gdf_error = gdf_error[
+                (gdf_error["Brep Error"].apply(lambda x: len(x) > 0))
+                | (gdf_error["Geoms Error"] == True)
+                | (gdf_error["Attrs Error"] == True)
+            ]
+            umi_project.gdf_error = gdf_error
         return umi_project
 
     @classmethod
